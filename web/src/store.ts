@@ -36,12 +36,14 @@ interface AppState {
   darkMode: boolean;
   sidebarOpen: boolean;
   taskPanelOpen: boolean;
+  homeResetKey: number;
 
   // Actions
   setDarkMode: (v: boolean) => void;
   toggleDarkMode: () => void;
   setSidebarOpen: (v: boolean) => void;
   setTaskPanelOpen: (open: boolean) => void;
+  newSession: () => void;
 
   // Session actions
   setCurrentSession: (id: string | null) => void;
@@ -62,6 +64,7 @@ interface AppState {
 
   // Task actions
   addTask: (sessionId: string, task: TaskItem) => void;
+  setTasks: (sessionId: string, tasks: TaskItem[]) => void;
   updateTask: (sessionId: string, taskId: string, updates: Partial<TaskItem>) => void;
 
   // Session name actions
@@ -110,6 +113,7 @@ export const useStore = create<AppState>((set) => ({
   darkMode: getInitialDarkMode(),
   sidebarOpen: typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   taskPanelOpen: typeof window !== "undefined" ? window.innerWidth >= 1024 : false,
+  homeResetKey: 0,
 
   setDarkMode: (v) => {
     localStorage.setItem("cc-dark-mode", String(v));
@@ -123,6 +127,7 @@ export const useStore = create<AppState>((set) => ({
     }),
   setSidebarOpen: (v) => set({ sidebarOpen: v }),
   setTaskPanelOpen: (open) => set({ taskPanelOpen: open }),
+  newSession: () => set((s) => ({ currentSessionId: null, homeResetKey: s.homeResetKey + 1 })),
 
   setCurrentSession: (id) => set({ currentSessionId: id }),
 
@@ -239,6 +244,13 @@ export const useStore = create<AppState>((set) => ({
     set((s) => {
       const sessionTasks = new Map(s.sessionTasks);
       const tasks = [...(sessionTasks.get(sessionId) || []), task];
+      sessionTasks.set(sessionId, tasks);
+      return { sessionTasks };
+    }),
+
+  setTasks: (sessionId, tasks) =>
+    set((s) => {
+      const sessionTasks = new Map(s.sessionTasks);
       sessionTasks.set(sessionId, tasks);
       return { sessionTasks };
     }),

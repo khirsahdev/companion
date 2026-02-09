@@ -331,6 +331,17 @@ export class WsBridge {
     session.state.total_cost_usd = msg.total_cost_usd;
     session.state.num_turns = msg.num_turns;
 
+    // Compute context usage from modelUsage
+    if (msg.modelUsage) {
+      for (const usage of Object.values(msg.modelUsage)) {
+        if (usage.contextWindow > 0) {
+          session.state.context_used_percent = Math.round(
+            ((usage.inputTokens + usage.outputTokens) / usage.contextWindow) * 100
+          );
+        }
+      }
+    }
+
     const browserMsg: BrowserIncomingMessage = {
       type: "result",
       data: msg,

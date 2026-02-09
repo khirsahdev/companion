@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useStore } from "../store.js";
 import { api } from "../api.js";
 import { connectSession, disconnectSession } from "../ws.js";
-import { NewSessionDialog } from "./NewSessionDialog.js";
 
 export function Sidebar() {
-  const [showNew, setShowNew] = useState(false);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -53,15 +51,14 @@ export function Sidebar() {
     }
   }
 
-  async function handleCreateSession(opts: { model?: string; permissionMode?: string; cwd?: string }) {
-    const result = await api.createSession(opts);
-    const sessionId = result.sessionId;
-    // Switch to new session
+  function handleNewSession() {
     if (currentSessionId) {
       disconnectSession(currentSessionId);
     }
-    setCurrentSession(sessionId);
-    connectSession(sessionId);
+    useStore.getState().newSession();
+    if (window.innerWidth < 768) {
+      useStore.getState().setSidebarOpen(false);
+    }
   }
 
   // Focus edit input when entering edit mode
@@ -129,7 +126,7 @@ export function Sidebar() {
         </div>
 
         <button
-          onClick={() => setShowNew(true)}
+          onClick={handleNewSession}
           className="w-full py-2 px-3 text-sm font-medium rounded-[10px] bg-cc-primary hover:bg-cc-primary-hover text-white transition-colors duration-150 flex items-center justify-center gap-1.5 cursor-pointer"
         >
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5">
@@ -258,12 +255,6 @@ export function Sidebar() {
         </button>
       </div>
 
-      {showNew && (
-        <NewSessionDialog
-          onClose={() => setShowNew(false)}
-          onCreate={handleCreateSession}
-        />
-      )}
     </aside>
   );
 }

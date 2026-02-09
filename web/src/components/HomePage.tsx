@@ -129,7 +129,6 @@ export function HomePage() {
 
   const selectedModel = MODELS.find((m) => m.value === model) || MODELS[0];
   const selectedMode = MODES.find((m) => m.value === mode) || MODES[0];
-  const recentDirs = getRecentDirs();
   const dirLabel = cwd ? cwd.split("/").pop() || cwd : "Select folder";
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -394,9 +393,9 @@ export function HomePage() {
               </svg>
             </button>
             {showDirDropdown && (
-              <div className="absolute left-0 bottom-full mb-1 w-[calc(100vw-2rem)] sm:w-80 max-w-80 bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-10 overflow-hidden">
+              <div className="absolute left-0 top-full mt-1 w-80 max-w-[calc(100vw-2rem)] max-h-[400px] flex flex-col bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-10 overflow-hidden">
                 {/* Current path display + manual input toggle */}
-                <div className="px-3 py-2 border-b border-cc-border flex items-center gap-2">
+                <div className="px-3 py-2 border-b border-cc-border flex items-center gap-2 shrink-0">
                   {showDirInput ? (
                     <input
                       type="text"
@@ -433,33 +432,6 @@ export function HomePage() {
                   )}
                 </div>
 
-                {/* Recent dirs */}
-                {recentDirs.length > 0 && !showDirInput && (
-                  <>
-                    <div className="px-3 py-1.5 text-[10px] text-cc-muted uppercase tracking-wider font-medium">Recent</div>
-                    {recentDirs.map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => { setCwd(d); setShowDirDropdown(false); }}
-                        className={`w-full px-3 py-1.5 text-xs text-left hover:bg-cc-hover transition-colors cursor-pointer truncate font-mono-code flex items-center gap-2 ${
-                          d === cwd ? "text-cc-primary font-medium" : "text-cc-fg"
-                        }`}
-                      >
-                        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 opacity-40 shrink-0">
-                          <path d="M1 3.5A1.5 1.5 0 012.5 2h3.379a1.5 1.5 0 011.06.44l.622.621a.5.5 0 00.353.146H13.5A1.5 1.5 0 0115 4.707V12.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z" />
-                        </svg>
-                        <span className="truncate">{d}</span>
-                        {d === cwd && (
-                          <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 text-cc-primary shrink-0 ml-auto">
-                            <path d="M12.416 3.376a.75.75 0 01.208 1.04l-5 7.5a.75.75 0 01-1.154.114l-3-3a.75.75 0 011.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 011.04-.207z" />
-                          </svg>
-                        )}
-                      </button>
-                    ))}
-                    <div className="border-t border-cc-border my-1" />
-                  </>
-                )}
-
                 {/* Directory browser */}
                 {!showDirInput && (
                   <>
@@ -495,7 +467,7 @@ export function HomePage() {
                     </button>
 
                     {/* Subdirectories */}
-                    <div className="max-h-48 overflow-y-auto">
+                    <div className="flex-1 min-h-0 overflow-y-auto">
                       {browseLoading ? (
                         <div className="px-3 py-3 text-xs text-cc-muted text-center">Loading...</div>
                       ) : browseDirs.length === 0 ? (
@@ -542,7 +514,7 @@ export function HomePage() {
               </svg>
             </button>
             {showModelDropdown && (
-              <div className="absolute left-0 bottom-full mb-1 w-44 bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-10 py-1 overflow-hidden">
+              <div className="absolute left-0 top-full mt-1 w-44 bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-10 py-1 overflow-hidden">
                 {MODELS.map((m) => (
                   <button
                     key={m.value}

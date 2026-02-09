@@ -5,16 +5,20 @@ const EMPTY_TASKS: TaskItem[] = [];
 
 export function TaskPanel({ sessionId }: { sessionId: string }) {
   const tasks = useStore((s) => s.sessionTasks.get(sessionId) || EMPTY_TASKS);
+  const session = useStore((s) => s.sessions.get(sessionId));
   const taskPanelOpen = useStore((s) => s.taskPanelOpen);
   const setTaskPanelOpen = useStore((s) => s.setTaskPanelOpen);
 
   if (!taskPanelOpen) return null;
 
+  const completedCount = tasks.filter((t) => t.status === "completed").length;
+  const contextPct = session?.context_used_percent ?? 0;
+
   return (
     <aside className="w-[280px] h-full flex flex-col bg-cc-card border-l border-cc-border">
       {/* Header */}
       <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-cc-border">
-        <span className="text-sm font-semibold text-cc-fg tracking-tight">Tasks</span>
+        <span className="text-sm font-semibold text-cc-fg tracking-tight">Session</span>
         <button
           onClick={() => setTaskPanelOpen(false)}
           className="flex items-center justify-center w-6 h-6 rounded-lg text-cc-muted hover:text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
@@ -25,12 +29,65 @@ export function TaskPanel({ sessionId }: { sessionId: string }) {
         </button>
       </div>
 
+      {/* Session stats */}
+      {session && (
+        <div className="shrink-0 px-4 py-3 border-b border-cc-border space-y-2.5">
+          {/* Cost */}
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-cc-muted uppercase tracking-wider">Cost</span>
+            <span className="text-[13px] font-medium text-cc-fg tabular-nums">
+              ${session.total_cost_usd.toFixed(4)}
+            </span>
+          </div>
+
+          {/* Context usage */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-cc-muted uppercase tracking-wider">Context</span>
+              <span className="text-[11px] text-cc-muted tabular-nums">
+                {contextPct > 0 ? `${contextPct}%` : "--"}
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-cc-hover overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  contextPct > 80
+                    ? "bg-cc-error"
+                    : contextPct > 50
+                    ? "bg-cc-warning"
+                    : "bg-cc-primary"
+                }`}
+                style={{ width: `${Math.min(contextPct, 100)}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Turns */}
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-cc-muted uppercase tracking-wider">Turns</span>
+            <span className="text-[13px] font-medium text-cc-fg tabular-nums">
+              {session.num_turns}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Task section header */}
+      <div className="shrink-0 px-4 py-2.5 border-b border-cc-border flex items-center justify-between">
+        <span className="text-[12px] font-semibold text-cc-fg">Tasks</span>
+        {tasks.length > 0 && (
+          <span className="text-[11px] text-cc-muted tabular-nums">
+            {completedCount}/{tasks.length}
+          </span>
+        )}
+      </div>
+
       {/* Task list */}
       <div className="flex-1 overflow-y-auto px-3 py-2">
         {tasks.length === 0 ? (
-          <p className="text-xs text-cc-muted text-center py-12">No tasks yet</p>
+          <p className="text-xs text-cc-muted text-center py-8">No tasks yet</p>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {tasks.map((task) => (
               <TaskRow key={task.id} task={task} />
             ))}
@@ -47,13 +104,13 @@ function TaskRow({ task }: { task: TaskItem }) {
 
   return (
     <div
-      className={`px-3 py-2 rounded-[10px] ${
-        isCompleted ? "opacity-60" : ""
+      className={`px-2.5 py-2 rounded-lg ${
+        isCompleted ? "opacity-50" : ""
       }`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         {/* Status icon */}
-        <span className="shrink-0 flex items-center justify-center w-4 h-4">
+        <span className="shrink-0 flex items-center justify-center w-4 h-4 mt-px">
           {isInProgress ? (
             <svg className="w-4 h-4 text-cc-primary animate-spin" viewBox="0 0 16 16" fill="none">
               <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" strokeDasharray="28" strokeDashoffset="8" strokeLinecap="round" />
@@ -69,14 +126,11 @@ function TaskRow({ task }: { task: TaskItem }) {
           )}
         </span>
 
-        {/* Subject */}
-        <span className={`text-[13px] flex-1 truncate ${isCompleted ? "text-cc-muted" : "text-cc-fg"}`}>
+        {/* Subject — allow wrapping */}
+        <span className={`text-[13px] leading-snug flex-1 ${
+          isCompleted ? "text-cc-muted line-through" : "text-cc-fg"
+        }`}>
           {task.subject}
-        </span>
-
-        {/* Task number badge */}
-        <span className="shrink-0 text-[10px] text-cc-muted bg-cc-hover px-1.5 py-0.5 rounded-full tabular-nums">
-          {task.id}
         </span>
       </div>
 

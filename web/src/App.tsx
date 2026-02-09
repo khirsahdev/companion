@@ -11,6 +11,7 @@ export default function App() {
   const currentSessionId = useStore((s) => s.currentSessionId);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const taskPanelOpen = useStore((s) => s.taskPanelOpen);
+  const homeResetKey = useStore((s) => s.homeResetKey);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -45,7 +46,7 @@ export default function App() {
           {currentSessionId ? (
             <ChatView sessionId={currentSessionId} />
           ) : (
-            <HomePage />
+            <HomePage key={homeResetKey} />
           )}
         </div>
       </div>

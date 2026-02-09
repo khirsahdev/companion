@@ -5,6 +5,81 @@ import { generateUniqueSessionName } from "./utils/names.js";
 const sockets = new Map<string, WebSocket>();
 const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const taskCounters = new Map<string, number>();
+/** Track processed tool_use IDs to prevent duplicate task creation */
+const processedToolUseIds = new Map<string, Set<string>>();
+
+function getProcessedSet(sessionId: string): Set<string> {
+  let set = processedToolUseIds.get(sessionId);
+  if (!set) {
+    set = new Set();
+    processedToolUseIds.set(sessionId, set);
+  }
+  return set;
+}
+
+function extractTasksFromBlocks(sessionId: string, blocks: ContentBlock[]) {
+  const store = useStore.getState();
+  const processed = getProcessedSet(sessionId);
+
+  for (const block of blocks) {
+    if (block.type !== "tool_use") continue;
+    const name = (block as { name?: string }).name;
+    const input = (block as { input?: Record<string, unknown> }).input;
+    const toolUseId = (block as { id?: string }).id;
+    if (!name || !input) continue;
+
+    // Deduplicate by tool_use_id
+    if (toolUseId) {
+      if (processed.has(toolUseId)) continue;
+      processed.add(toolUseId);
+    }
+
+    // TodoWrite: full replacement — { todos: [{ content, status, activeForm }] }
+    if (name === "TodoWrite") {
+      const todos = input.todos as { content?: string; status?: string; activeForm?: string }[] | undefined;
+      if (Array.isArray(todos)) {
+        const tasks: TaskItem[] = todos.map((t, i) => ({
+          id: String(i + 1),
+          subject: t.content || "Task",
+          description: "",
+          activeForm: t.activeForm,
+          status: (t.status as TaskItem["status"]) || "pending",
+        }));
+        store.setTasks(sessionId, tasks);
+        taskCounters.set(sessionId, tasks.length);
+      }
+      continue;
+    }
+
+    // TaskCreate: incremental add — { subject, description, activeForm }
+    if (name === "TaskCreate") {
+      const count = (taskCounters.get(sessionId) || 0) + 1;
+      taskCounters.set(sessionId, count);
+      const task = {
+        id: String(count),
+        subject: (input.subject as string) || "Task",
+        description: (input.description as string) || "",
+        activeForm: input.activeForm as string | undefined,
+        status: "pending" as const,
+      };
+      store.addTask(sessionId, task);
+      continue;
+    }
+
+    // TaskUpdate: incremental update — { taskId, status, owner, activeForm, addBlockedBy }
+    if (name === "TaskUpdate") {
+      const taskId = input.taskId as string;
+      if (taskId) {
+        const updates: Partial<TaskItem> = {};
+        if (input.status) updates.status = input.status as TaskItem["status"];
+        if (input.owner) updates.owner = input.owner as string;
+        if (input.activeForm !== undefined) updates.activeForm = input.activeForm as string;
+        if (input.addBlockedBy) updates.blockedBy = input.addBlockedBy as string[];
+        store.updateTask(sessionId, taskId, updates);
+      }
+    }
+  }
+}
 
 let idCounter = 0;
 function nextId(): string {
@@ -71,32 +146,9 @@ function handleMessage(sessionId: string, event: MessageEvent) {
       store.setStreaming(sessionId, null);
       store.setSessionStatus(sessionId, "running");
 
-      // Extract TaskCreate and TaskUpdate from content blocks
-      for (const block of msg.content) {
-        if (block.type === "tool_use" && block.name === "TaskCreate") {
-          const count = (taskCounters.get(sessionId) || 0) + 1;
-          taskCounters.set(sessionId, count);
-          const input = block.input as { subject?: string; description?: string; activeForm?: string };
-          store.addTask(sessionId, {
-            id: String(count),
-            subject: input.subject || "Task",
-            description: input.description || "",
-            activeForm: input.activeForm,
-            status: "pending",
-          });
-        }
-
-        if (block.type === "tool_use" && block.name === "TaskUpdate") {
-          const input = block.input as { taskId?: string; status?: string; owner?: string; activeForm?: string; addBlockedBy?: string[] };
-          if (input.taskId) {
-            const updates: Partial<TaskItem> = {};
-            if (input.status) updates.status = input.status as TaskItem["status"];
-            if (input.owner) updates.owner = input.owner;
-            if (input.activeForm !== undefined) updates.activeForm = input.activeForm;
-            if (input.addBlockedBy) updates.blockedBy = input.addBlockedBy;
-            store.updateTask(sessionId, input.taskId, updates);
-          }
-        }
+      // Extract tasks from tool_use content blocks
+      if (msg.content?.length) {
+        extractTasksFromBlocks(sessionId, msg.content);
       }
 
       break;
@@ -119,10 +171,21 @@ function handleMessage(sessionId: string, event: MessageEvent) {
 
     case "result": {
       const r = data.data;
-      store.updateSession(sessionId, {
+      const sessionUpdates: Partial<{ total_cost_usd: number; num_turns: number; context_used_percent: number }> = {
         total_cost_usd: r.total_cost_usd,
         num_turns: r.num_turns,
-      });
+      };
+      // Compute context % from modelUsage if available
+      if (r.modelUsage) {
+        for (const usage of Object.values(r.modelUsage)) {
+          if (usage.contextWindow > 0) {
+            sessionUpdates.context_used_percent = Math.round(
+              ((usage.inputTokens + usage.outputTokens) / usage.contextWindow) * 100
+            );
+          }
+        }
+      }
+      store.updateSession(sessionId, sessionUpdates);
       store.setStreaming(sessionId, null);
       store.setSessionStatus(sessionId, "idle");
       if (r.is_error && r.errors?.length) {
@@ -138,6 +201,16 @@ function handleMessage(sessionId: string, event: MessageEvent) {
 
     case "permission_request": {
       store.addPermission(data.request);
+      // Also extract tasks from permission requests (tool_name + input available)
+      const req = data.request;
+      if (req.tool_name && req.input) {
+        extractTasksFromBlocks(sessionId, [{
+          type: "tool_use",
+          id: req.tool_use_id,
+          name: req.tool_name,
+          input: req.input,
+        }]);
+      }
       break;
     }
 
@@ -221,6 +294,10 @@ function handleMessage(sessionId: string, event: MessageEvent) {
             model: msg.model,
             stopReason: msg.stop_reason,
           });
+          // Also extract tasks from history
+          if (msg.content?.length) {
+            extractTasksFromBlocks(sessionId, msg.content);
+          }
         } else if (histMsg.type === "result") {
           const r = histMsg.data;
           if (r.is_error && r.errors?.length) {
@@ -297,6 +374,8 @@ export function disconnectSession(sessionId: string) {
     ws.close();
     sockets.delete(sessionId);
   }
+  processedToolUseIds.delete(sessionId);
+  taskCounters.delete(sessionId);
 }
 
 export function disconnectAll() {

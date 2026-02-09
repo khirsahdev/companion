@@ -114,15 +114,21 @@ export function createRoutes(bridge: ControllerBridge, launcher?: CliLauncher, w
   api.post("/sessions/create", async (c) => {
     if (!launcher) return c.json({ error: "CLI launcher not available" }, 503);
     const body = await c.req.json().catch(() => ({}));
-    const session = launcher.launch({
-      model: body.model,
-      permissionMode: body.permissionMode,
-      cwd: body.cwd,
-      claudeBinary: body.claudeBinary,
-      allowedTools: body.allowedTools,
-      env: body.env,
-    });
-    return c.json(session);
+    try {
+      const session = launcher.launch({
+        model: body.model,
+        permissionMode: body.permissionMode,
+        cwd: body.cwd,
+        claudeBinary: body.claudeBinary,
+        allowedTools: body.allowedTools,
+        env: body.env,
+      });
+      return c.json(session);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[routes] Failed to create session:", msg);
+      return c.json({ error: msg }, 500);
+    }
   });
 
   api.get("/sessions", (c) => {
