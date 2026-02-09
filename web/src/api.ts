@@ -38,6 +38,18 @@ export interface CreateSessionOpts {
   allowedTools?: string[];
 }
 
+export interface DirEntry {
+  name: string;
+  path: string;
+}
+
+export interface DirListResult {
+  path: string;
+  dirs: DirEntry[];
+  home: string;
+  error?: string;
+}
+
 export const api = {
   createSession: (opts?: CreateSessionOpts) =>
     post<{ sessionId: string; state: string; cwd: string }>("/sessions/create", opts),
@@ -50,4 +62,10 @@ export const api = {
 
   deleteSession: (sessionId: string) =>
     del(`/sessions/${encodeURIComponent(sessionId)}`),
+
+  listDirs: (path?: string) =>
+    get<DirListResult>(`/fs/list${path ? `?path=${encodeURIComponent(path)}` : ""}`),
+
+  getHome: () =>
+    get<{ home: string; cwd: string }>("/fs/home"),
 };

@@ -1,5 +1,8 @@
 import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
+import { readdir, stat } from "node:fs/promises";
+import { resolve, join } from "node:path";
+import { homedir } from "node:os";
 import type { ControllerBridge } from "./controller-bridge.js";
 import type { CliLauncher } from "./cli-launcher.js";
 import type { WsBridge } from "./ws-bridge.js";
@@ -158,6 +161,30 @@ export function createRoutes(bridge: ControllerBridge, launcher?: CliLauncher, w
     }
 
     return c.json({ ok: true });
+  });
+
+  // ─── Filesystem browsing ─────────────────────────────────────
+
+  api.get("/fs/list", async (c) => {
+    const rawPath = c.req.query("path") || homedir();
+    const basePath = resolve(rawPath);
+    try {
+      const entries = await readdir(basePath, { withFileTypes: true });
+      const dirs: { name: string; path: string }[] = [];
+      for (const entry of entries) {
+        if (entry.isDirectory() && !entry.name.startsWith(".")) {
+          dirs.push({ name: entry.name, path: join(basePath, entry.name) });
+        }
+      }
+      dirs.sort((a, b) => a.name.localeCompare(b.name));
+      return c.json({ path: basePath, dirs, home: homedir() });
+    } catch (err) {
+      return c.json({ error: "Cannot read directory", path: basePath, dirs: [], home: homedir() }, 400);
+    }
+  });
+
+  api.get("/fs/home", (c) => {
+    return c.json({ home: homedir(), cwd: process.cwd() });
   });
 
   return api;

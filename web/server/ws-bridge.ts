@@ -39,6 +39,8 @@ interface Session {
   state: SessionState;
   pendingPermissions: Map<string, PermissionRequest>;
   messageHistory: BrowserIncomingMessage[];
+  /** Messages queued while waiting for CLI to connect */
+  pendingMessages: string[];
 }
 
 function makeDefaultState(sessionId: string): SessionState {
@@ -75,6 +77,7 @@ export class WsBridge {
         state: makeDefaultState(sessionId),
         pendingPermissions: new Map(),
         messageHistory: [],
+        pendingMessages: [],
       };
       this.sessions.set(sessionId, session);
     }
@@ -122,6 +125,15 @@ export class WsBridge {
     session.cliSocket = ws;
     console.log(`[ws-bridge] CLI connected for session ${sessionId}`);
     this.broadcastToBrowsers(session, { type: "cli_connected" });
+
+    // Flush any messages that were queued while waiting for CLI to connect
+    if (session.pendingMessages.length > 0) {
+      console.log(`[ws-bridge] Flushing ${session.pendingMessages.length} queued message(s) for session ${sessionId}`);
+      for (const ndjson of session.pendingMessages) {
+        this.sendToCLI(session, ndjson);
+      }
+      session.pendingMessages = [];
+    }
   }
 
   handleCLIMessage(ws: ServerWebSocket<SocketData>, raw: string | Buffer) {
@@ -409,18 +421,34 @@ export class WsBridge {
 
   private handleUserMessage(
     session: Session,
-    msg: { type: "user_message"; content: string; session_id?: string }
+    msg: { type: "user_message"; content: string; session_id?: string; images?: { media_type: string; data: string }[] }
   ) {
-    // Store user message in history for replay
+    // Store user message in history for replay (text-only for replay)
     session.messageHistory.push({
       type: "user_message",
       content: msg.content,
       timestamp: Date.now(),
     });
 
+    // Build content: if images are present, use content block array; otherwise plain string
+    let content: string | unknown[];
+    if (msg.images?.length) {
+      const blocks: unknown[] = [];
+      for (const img of msg.images) {
+        blocks.push({
+          type: "image",
+          source: { type: "base64", media_type: img.media_type, data: img.data },
+        });
+      }
+      blocks.push({ type: "text", text: msg.content });
+      content = blocks;
+    } else {
+      content = msg.content;
+    }
+
     const ndjson = JSON.stringify({
       type: "user",
-      message: { role: "user", content: msg.content },
+      message: { role: "user", content },
       parent_tool_use_id: null,
       session_id: msg.session_id || session.state.session_id || "",
     });
@@ -495,11 +523,9 @@ export class WsBridge {
 
   private sendToCLI(session: Session, ndjson: string) {
     if (!session.cliSocket) {
-      console.warn(`[ws-bridge] No CLI connected for session ${session.id}`);
-      this.broadcastToBrowsers(session, {
-        type: "error",
-        message: "CLI is not connected",
-      });
+      // Queue the message — CLI might still be starting up
+      console.log(`[ws-bridge] CLI not yet connected for session ${session.id}, queuing message`);
+      session.pendingMessages.push(ndjson);
       return;
     }
     try {

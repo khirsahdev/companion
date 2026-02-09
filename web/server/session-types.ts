@@ -150,7 +150,7 @@ export type ContentBlock =
 
 /** Messages the browser sends to the bridge */
 export type BrowserOutgoingMessage =
-  | { type: "user_message"; content: string; session_id?: string }
+  | { type: "user_message"; content: string; session_id?: string; images?: { media_type: string; data: string }[] }
   | { type: "permission_response"; request_id: string; behavior: "allow" | "deny"; updated_input?: Record<string, unknown>; message?: string }
   | { type: "interrupt" }
   | { type: "set_model"; model: string }

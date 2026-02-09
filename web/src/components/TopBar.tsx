@@ -1,4 +1,12 @@
+import { useState, useEffect, useRef } from "react";
 import { useStore } from "../store.js";
+import { sendToSession } from "../ws.js";
+
+const MODEL_OPTIONS = [
+  { label: "Opus 4.6", value: "claude-opus-4-6" },
+  { label: "Sonnet 4.5", value: "claude-sonnet-4-5-20250929" },
+  { label: "Haiku 4.5", value: "claude-haiku-4-5-20251001" },
+] as const;
 
 export function TopBar() {
   const currentSessionId = useStore((s) => s.currentSessionId);
@@ -7,6 +15,7 @@ export function TopBar() {
   const sessionStatus = useStore((s) => s.sessionStatus);
   const sidebarOpen = useStore((s) => s.sidebarOpen);
   const setSidebarOpen = useStore((s) => s.setSidebarOpen);
+  const previousPermissionMode = useStore((s) => s.previousPermissionMode);
 
   const session = currentSessionId ? sessions.get(currentSessionId) : null;
   const isConnected = currentSessionId ? (cliConnected.get(currentSessionId) ?? false) : false;
@@ -44,11 +53,19 @@ export function TopBar() {
       {session && (
         <div className="flex items-center gap-4 text-[12px] text-cc-muted">
           {session.model && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-cc-muted/60">Model</span>
-              <span className="font-medium text-cc-fg font-mono-code text-[11px]">{session.model}</span>
-            </div>
+            <ModelSwitcher
+              sessionId={currentSessionId!}
+              currentModel={session.model}
+              isConnected={isConnected}
+            />
           )}
+
+          <PlanModeToggle
+            sessionId={currentSessionId!}
+            currentMode={session.permissionMode}
+            previousMode={previousPermissionMode.get(currentSessionId!) ?? "default"}
+            isConnected={isConnected}
+          />
 
           {session.total_cost_usd > 0 && (
             <>
@@ -103,5 +120,126 @@ export function TopBar() {
         </div>
       )}
     </header>
+  );
+}
+
+function ModelSwitcher({
+  sessionId,
+  currentModel,
+  isConnected,
+}: {
+  sessionId: string;
+  currentModel: string;
+  isConnected: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [open]);
+
+  const currentLabel =
+    MODEL_OPTIONS.find((m) => m.value === currentModel)?.label ?? currentModel;
+
+  function selectModel(value: string) {
+    if (value === currentModel) {
+      setOpen(false);
+      return;
+    }
+    sendToSession(sessionId, { type: "set_model", model: value });
+    useStore.getState().updateSession(sessionId, { model: value });
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => isConnected && setOpen(!open)}
+        disabled={!isConnected}
+        className={`flex items-center gap-1.5 cursor-pointer ${
+          !isConnected ? "opacity-40 cursor-not-allowed" : "hover:text-cc-fg"
+        }`}
+      >
+        <span className="text-cc-muted/60">Model</span>
+        <span className="font-medium text-cc-fg font-mono-code text-[11px]">{currentLabel}</span>
+        <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3 text-cc-muted/60">
+          <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 011.06 0L8 8.94l2.72-2.72a.75.75 0 111.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L4.22 7.28a.75.75 0 010-1.06z" clipRule="evenodd" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full right-0 mt-1.5 min-w-[180px] bg-cc-card border border-cc-border rounded-[10px] shadow-lg z-50 py-1">
+          {MODEL_OPTIONS.map((m) => (
+            <button
+              key={m.value}
+              onClick={() => selectModel(m.value)}
+              className="w-full flex items-center justify-between px-3 py-1.5 text-[12px] text-cc-fg hover:bg-cc-hover transition-colors cursor-pointer"
+            >
+              <span>{m.label}</span>
+              {m.value === currentModel && (
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5 text-cc-primary">
+                  <path fillRule="evenodd" d="M12.416 3.376a.75.75 0 01.208 1.04l-5 7.5a.75.75 0 01-1.154.114l-3-3a.75.75 0 011.06-1.06l2.353 2.353 4.493-6.74a.75.75 0 011.04-.207z" clipRule="evenodd" />
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanModeToggle({
+  sessionId,
+  currentMode,
+  previousMode,
+  isConnected,
+}: {
+  sessionId: string;
+  currentMode: string;
+  previousMode: string;
+  isConnected: boolean;
+}) {
+  const isPlan = currentMode === "plan";
+
+  function toggle() {
+    if (!isConnected) return;
+    const store = useStore.getState();
+    if (!isPlan) {
+      store.setPreviousPermissionMode(sessionId, currentMode);
+      sendToSession(sessionId, { type: "set_permission_mode", mode: "plan" });
+      store.updateSession(sessionId, { permissionMode: "plan" });
+    } else {
+      const restoreMode = previousMode || "default";
+      sendToSession(sessionId, { type: "set_permission_mode", mode: restoreMode });
+      store.updateSession(sessionId, { permissionMode: restoreMode });
+    }
+  }
+
+  return (
+    <>
+      <span className="text-cc-border">|</span>
+      <button
+        onClick={toggle}
+        disabled={!isConnected}
+        className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+          !isConnected
+            ? "opacity-40 cursor-not-allowed border border-cc-border text-cc-muted"
+            : isPlan
+            ? "bg-cc-primary text-white"
+            : "border border-cc-border text-cc-muted hover:text-cc-fg hover:border-cc-fg/30"
+        }`}
+      >
+        Plan
+      </button>
+    </>
   );
 }

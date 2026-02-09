@@ -23,6 +23,9 @@ interface AppState {
   // Session status
   sessionStatus: Map<string, "idle" | "running" | "compacting" | null>;
 
+  // Plan mode: stores previous permission mode per session so we can restore it
+  previousPermissionMode: Map<string, string>;
+
   // UI
   darkMode: boolean;
   sidebarOpen: boolean;
@@ -49,6 +52,9 @@ interface AppState {
   addPermission: (perm: PermissionRequest) => void;
   removePermission: (requestId: string) => void;
 
+  // Plan mode actions
+  setPreviousPermissionMode: (sessionId: string, mode: string) => void;
+
   // Connection actions
   setConnectionStatus: (sessionId: string, status: "connecting" | "connected" | "disconnected") => void;
   setCliConnected: (sessionId: string, connected: boolean) => void;
@@ -74,6 +80,7 @@ export const useStore = create<AppState>((set) => ({
   connectionStatus: new Map(),
   cliConnected: new Map(),
   sessionStatus: new Map(),
+  previousPermissionMode: new Map(),
   darkMode: getInitialDarkMode(),
   sidebarOpen: true,
 
@@ -122,6 +129,8 @@ export const useStore = create<AppState>((set) => ({
       cliConnected.delete(sessionId);
       const sessionStatus = new Map(s.sessionStatus);
       sessionStatus.delete(sessionId);
+      const previousPermissionMode = new Map(s.previousPermissionMode);
+      previousPermissionMode.delete(sessionId);
       return {
         sessions,
         messages,
@@ -129,6 +138,7 @@ export const useStore = create<AppState>((set) => ({
         connectionStatus,
         cliConnected,
         sessionStatus,
+        previousPermissionMode,
         sdkSessions: s.sdkSessions.filter((sdk) => sdk.sessionId !== sessionId),
         currentSessionId: s.currentSessionId === sessionId ? null : s.currentSessionId,
       };
@@ -190,6 +200,13 @@ export const useStore = create<AppState>((set) => ({
       return { pendingPermissions };
     }),
 
+  setPreviousPermissionMode: (sessionId, mode) =>
+    set((s) => {
+      const previousPermissionMode = new Map(s.previousPermissionMode);
+      previousPermissionMode.set(sessionId, mode);
+      return { previousPermissionMode };
+    }),
+
   setConnectionStatus: (sessionId, status) =>
     set((s) => {
       const connectionStatus = new Map(s.connectionStatus);
@@ -222,5 +239,6 @@ export const useStore = create<AppState>((set) => ({
       connectionStatus: new Map(),
       cliConnected: new Map(),
       sessionStatus: new Map(),
+      previousPermissionMode: new Map(),
     }),
 }));
