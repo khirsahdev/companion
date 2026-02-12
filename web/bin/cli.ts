@@ -80,7 +80,7 @@ Commands:
   logs        Tail service log files
 
 Options:
-  --port <n>  Override the default port (default: 3457)
+  --port <n>  Override the default port (default: 3456)
 `);
     process.exit(1);
 }

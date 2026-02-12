@@ -125,7 +125,7 @@ describe("generatePlist", () => {
   it("uses the default production port when none specified", () => {
     const plist = service.generatePlist({ binPath: "/usr/local/bin/the-vibe-companion" });
     expect(plist).toContain("<key>PORT</key>");
-    expect(plist).toContain("<string>3457</string>");
+    expect(plist).toContain("<string>3456</string>");
   });
 
   it("uses a custom port when specified", () => {
@@ -302,7 +302,7 @@ describe("status", () => {
     expect(result.installed).toBe(true);
     expect(result.running).toBe(true);
     expect(result.pid).toBe(12345);
-    expect(result.port).toBe(3457);
+    expect(result.port).toBe(3456);
   });
 
   it("returns installed: true, running: false when service is loaded but not running", async () => {
