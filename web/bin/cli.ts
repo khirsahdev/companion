@@ -12,7 +12,8 @@ switch (command) {
   case "install": {
     const { install } = await import("../server/service.js");
     const portIdx = process.argv.indexOf("--port");
-    const port = portIdx !== -1 ? Number(process.argv[portIdx + 1]) : undefined;
+    const rawPort = portIdx !== -1 ? Number(process.argv[portIdx + 1]) : undefined;
+    const port = rawPort && !Number.isNaN(rawPort) ? rawPort : undefined;
     await install({ port });
     break;
   }
@@ -45,6 +46,12 @@ switch (command) {
     const { spawn } = await import("node:child_process");
     const logFile = join(homedir(), ".companion/logs/companion.log");
     const errFile = join(homedir(), ".companion/logs/companion.error.log");
+    const { existsSync } = await import("node:fs");
+    if (!existsSync(logFile) && !existsSync(errFile)) {
+      console.error("No log files found at ~/.companion/logs/");
+      console.error("The service may not have been started yet.");
+      process.exit(1);
+    }
     console.log("Tailing logs from ~/.companion/logs/");
     const tail = spawn("tail", ["-f", logFile, errFile], { stdio: "inherit" });
     tail.on("exit", () => process.exit(0));
