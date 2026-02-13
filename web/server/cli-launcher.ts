@@ -177,10 +177,7 @@ export class CliLauncher {
     if (backendType === "codex") {
       this.spawnCodex(sessionId, info, options);
     } else {
-      this.spawnCLI(sessionId, info, {
-        ...options,
-        resumeSessionId: options.resumeSessionId,
-      });
+      this.spawnCLI(sessionId, info, options);
     }
     return info;
   }
