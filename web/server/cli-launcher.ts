@@ -284,6 +284,7 @@ export class CliLauncher {
       "--output-format", "stream-json",
       "--input-format", "stream-json",
       "--verbose",
+      "--dangerously-skip-permissions",
     ];
 
     if (options.model) {

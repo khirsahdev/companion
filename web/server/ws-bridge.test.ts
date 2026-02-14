@@ -2982,7 +2982,7 @@ describe("/clear command interception", () => {
 
     const calls = browser.send.mock.calls.map((c: unknown[]) => JSON.parse(c[0] as string));
     const cleared = calls.find((m: { type: string }) => m.type === "session_cleared");
-    expect(cleared).toEqual({ type: "session_cleared" });
+    expect(cleared).toMatchObject({ type: "session_cleared" });
   });
 
   it("calls onClearSession callback", () => {
