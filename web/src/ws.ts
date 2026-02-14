@@ -438,6 +438,21 @@ function handleParsedMessage(
       break;
     }
 
+    case "session_cleared": {
+      store.clearSessionData(sessionId);
+      // Reset task tracking for the session
+      processedToolUseIds.delete(sessionId);
+      taskCounters.delete(sessionId);
+      // Show a system message
+      store.appendMessage(sessionId, {
+        id: nextId(),
+        role: "system",
+        content: "Session cleared.",
+        timestamp: Date.now(),
+      });
+      break;
+    }
+
     case "session_name_update": {
       // Only apply auto-name if user hasn't manually renamed (still has random Adj+Noun name)
       const currentName = store.sessionNames.get(sessionId);
