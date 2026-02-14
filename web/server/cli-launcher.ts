@@ -74,6 +74,8 @@ export interface LaunchOptions {
   codexInternetAccess?: boolean;
   /** Optional override for CODEX_HOME used by Codex sessions. */
   codexHome?: string;
+  /** Resume an existing Claude CLI session by its internal session ID */
+  resumeSessionId?: string;
   /** Pre-resolved worktree info from the session creation flow */
   worktreeInfo?: {
     isWorktree: boolean;
